@@ -152,13 +152,33 @@ module emu
 	// 1 - D-/TX
 	// 2..6 - USR2..USR6
 	// Set USER_OUT to 1 to read from USER_IN.
-	input   [6:0] USER_IN,
-	output  [6:0] USER_OUT,
+	output			USER_OSD,
+	output		[1:0] USER_MODE,
+	input		[7:0] USER_IN,
+	output		[7:0] USER_OUT,	
 
 	input         OSD_STATUS
 );
 
 `include "rtl/quirks.vh"
+
+wire [15:0] joydb_1,joydb_2;
+wire        joydb_1ena,joydb_2ena;
+joydbmix joydbmix
+(
+  .CLK_JOY(CLK_50M),
+  .JOY_FLAG(status[63:61]),
+  .USER_IN(USER_IN),
+  .USER_OUT(USER_OUT),
+  .USER_MODE(USER_MODE),
+  .USER_OSD(USER_OSD),
+  .joydb_1ena(joydb_1ena),
+  .joydb_2ena(joydb_2ena),
+  .joydb_1(joydb_1),
+  .joydb_2(joydb_2)
+);
+wire [15:0]   joy1 = joydb_1ena ? {joydb_1[11]|(joydb_1[10]&joydb_1[5]),joydb_1[9],joydb_1[10],joydb_1[8:0]} : joy1_USB;
+wire [15:0]   joy2 = joydb_2ena ? {joydb_2[11]|(joydb_2[10]&joydb_2[5]),joydb_2[10],joydb_2[9],joydb_2[8:0]} : joydb_1ena ? joy1_USB : joy2_USB;
 
 assign {SD_SCK, SD_MOSI, SD_CS} = 'Z;
 assign {UART_RTS, UART_TXD, UART_DTR} = 0;
@@ -168,7 +188,7 @@ assign VGA_F1 = 0;
 assign VGA_SCALER = 0;
 assign HDMI_FREEZE = 0;
 
-assign USER_OUT  = '1;
+//assign USER_OUT  = '1;
 
 assign LED_USER  = ioctl_download;
 assign LED_DISK  = 0;
@@ -195,6 +215,9 @@ localparam CONF_STR = {
 	"O7,Pause when OSD is open,On,Off;",
 	"-;",
 	"DIP;",
+	"-;",
+	"oUV,UserIO Joystick,Off,DB15,DB9MD;",
+	"oT,UserIO Players, 1 Player,2 Players;",	
 	"-;",
 	"OOR,Analog Video H-Pos,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
 	"OSV,Analog Video V-Pos,0,1,2,3,4,5,6,7,-8,-7,-6,-5,-4,-3,-2,-1;",
@@ -229,7 +252,7 @@ pll pll
 
 ///////////////////////////////////////////////////
 
-wire    [31:0]  status;
+wire    [63:0]  status;
 wire     [1:0]  buttons;
 wire    [10:0]  ps2_key;
 
@@ -244,7 +267,7 @@ wire    [24:0]  ioctl_addr;
 wire    [7:0]   ioctl_dout;
 wire    [7:0]   ioctl_din;
 
-wire    [15:0]  joy1, joy2;
+wire    [15:0]  joy1_USB, joy2_USB;
 wire    [15:0]  joy = joy1 | joy2;
 wire    [8:0]   spinner_0, spinner_1;
 wire    [24:0]  ps2_mouse;
@@ -273,10 +296,11 @@ hps_io #(.CONF_STR(CONF_STR)) hps_io
 	.ioctl_din(ioctl_din),
 	.ioctl_index(ioctl_index),
 
+	.joy_raw(joydb_1[5:0] | joydb_2[5:0]),
 	.ps2_key(ps2_key),
 	.ps2_mouse(ps2_mouse),
-	.joystick_0(joy1),
-	.joystick_1(joy2),
+	.joystick_0(joy1_USB),
+	.joystick_1(joy2_USB),
 	.spinner_0(spinner_0),
 	.spinner_1(spinner_1)
 );
